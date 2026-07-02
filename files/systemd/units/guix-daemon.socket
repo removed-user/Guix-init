@@ -1,0 +1,28 @@
+[Unit]
+Description="Guix Daemon Socket"
+Documentation=man:guix-daemon(1)
+Documentation=man:guix-repl(1)
+; BindsTo=guix-daemon.service
+Before=shutdown.target
+DefaultDependencies=no
+
+; RequiresMountsFor=/gnu/store
+
+[Socket]
+Accept=no
+Timestamping=us
+RestrictAddressFamilies= AF_UNIX
+ListenStream=/var/guix/daemon-socket/socket
+Service=guix-daemon.service
+Group=guix-daemon
+User=guix-daemon
+SocketUser=guix-daemon
+SocketGroup=guix-daemon
+SocketMode=0660
+
+
+; SendBuffer=8M
+; RemoveOnStop=true
+[Install]
+
+UpheldBy=sockets.target

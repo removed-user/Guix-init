@@ -1,0 +1,64 @@
+# /lib/systemd/system/guix-daemon.service
+[Unit]
+Description=Build daemon for GNU Guix
+ 
+#Start before 'gnu-store.mount' writable view of the store.
+Before= gnu-store.mount
+
+Requires= guix-daemon.socket 
+
+[Service]
+Environment='GUIX_STATE_DIRECTORY=/var/guix'
+Environment='GUIX_LOCPATH=/root/.nix-profile/share/locale/'
+Environment='LC_ALL=en_US.utf8'
+Socket=guix-daemon.socket
+PropogatesReloadTo= guix-daemon.socket
+
+ExecStart=/nix/var/nix/profiles/default/bin/guix-daemon \
+ --discover=no \
+ --no-substitutes \
+ --system=x86_64-linux \
+ --build-users-group=guixbuild \
+ --listen /var/guix/daemon-socket/socket 
+
+# was /var/guix/profiles/per-user/root/current-guix/bin/guix-daemon 
+# ; --substitute-urls='https://bordeaux.guix.gnu.org https://ci.guix.gnu.org'
+
+ 
+User=guix-daemon
+# Stop the gnu-store.mount to capture a R\W view in private mount NS.
+# See <https://codeberg.org/guix/guix/issues/4744>.
+ 
+# Bind-mount store RW in private ns, countering effects of 'gnu-store.mount'
+PrivateMounts=true
+BindPaths=/gnu/store
+#Keep service view of "store" R/W after 'gnu-store.mount' makes it RO system-wide.
+	MountFlags=private
+# Mitigate race condition between guix-daemon and 'gnu-store.mount'.
+# Dependent units will only start after daemon binary is started AND THUS
+# the mount point is acquired in a private namespace.
+Type=exec
+
+# Provide CAP_CHOWN capability to create and chown
+	# - /var/guix/profiles/per-user/$USER  
+	# - and failed build directories
+# when using '--keep-failed'. 
+# guix-daemon explicitly drops ambient caps before executing builds so they don't inherit them.
+AmbientCapabilities=CAP_CHOWN
+
+# StandardOutput=journal
+# StandardError=journal
+
+
+# Restarts
+	Restart=on-failure
+	RestartSec=7s
+# Start Limits
+	StartLimitIntervalSec=30
+	StartLimitBurst=3
+# Processes
+	TasksMax=8192
+	# Work around oom killing process-trees "including the daemon!"
+	# When any child runs out of memory.
+	OOMPolicy=continue
+
